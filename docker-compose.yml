@@ -1,0 +1,19 @@
+services:
+  db:
+    image: ankane/pgvector:v0.5.1
+    environment:
+      POSTGRES_USER: ringbrain
+      POSTGRES_PASSWORD: ringbrain
+      POSTGRES_DB: ringbrain
+    ports:
+      - "5432:5432"
+    volumes:
+      - ringbrain_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ringbrain"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ringbrain_pgdata:

@@ -1,5 +1,9 @@
 # RingBrain
 
+[![CI](https://github.com/achodey13/ringbrain/actions/workflows/ci.yml/badge.svg)](https://github.com/achodey13/ringbrain/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
+
 A voice/SMS AI receptionist that answers calls, qualifies leads, books real appointments, and — unlike a plain chatbot wrapper — **remembers every customer** across future contacts via a persistent semantic memory layer.
 
 Built as a portfolio project demonstrating production AI-engineering patterns: multi-agent orchestration, tool-calling into real external systems, retrieval-based memory, and eval-driven development — not just a prompt pasted into an API call.
@@ -50,6 +54,7 @@ Graph implemented in [`src/ringbrain/agents/graph.py`](src/ringbrain/agents/grap
 - **Memory is retrieval, not a growing prompt.** Every past conversation is summarized and embedded (`sentence-transformers/all-MiniLM-L6-v2`) into Postgres/pgvector, then semantically searched per-call — this scales to years of history without blowing the context window.
 - **A confidence gate, not blind automation.** Complaints and low-confidence intents never reach the booking/reply logic — they're routed to human handoff. This is the difference between a toy demo and something you'd actually trust with real customers.
 - **Every dependency is behind an interface.** `LLMClient`, `Embedder`, `IntentClassifier`, `CalendarClient`, `SMSClient` are all `Protocol`s with a real implementation and a fake. The entire agent graph, eval harness, and CLI simulator run with zero external services — only `ANTHROPIC_API_KEY` is required to actually talk to it.
+- **The model is never trusted blindly.** A malformed LLM response escalates to a human instead of crashing the call. If the model names an appointment slot that isn't in the real availability list, that's treated as a caught hallucination and the booking is refused, not silently accepted. Transient Claude API errors (rate limits, timeouts, 5xx) retry with backoff; a bad request fails fast instead of retrying something that will never succeed.
 
 ## Project layout
 
@@ -68,11 +73,10 @@ src/ringbrain/
 ## Quickstart (no Twilio/Google/Postgres needed)
 
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env   # then set ANTHROPIC_API_KEY
+make setup            # venv + deps + .env
+# edit .env, set ANTHROPIC_API_KEY
 
-python -m ringbrain.cli
+make chat              # or: python -m ringbrain.cli
 ```
 
 This runs the full agent graph — intent classification, memory recall, an in-memory fake calendar — entirely in your terminal. Use the same phone number across two runs to see it recall prior context.
@@ -80,7 +84,7 @@ This runs the full agent graph — intent classification, memory recall, an in-m
 ## Run the eval suite
 
 ```bash
-python -m ringbrain.eval.harness
+make eval               # or: python -m ringbrain.eval.harness
 ```
 
 Runs 7 synthetic caller personas (straightforward booking, rescheduling, price-shopping, an angry complaint, a rambling/ambiguous caller, a hallucination-bait prompt, and a negotiating booker) end-to-end against the real agent graph, using an LLM to *play* the caller. Scores:
@@ -91,13 +95,13 @@ Runs 7 synthetic caller personas (straightforward booking, rescheduling, price-s
 
 Full transcripts + scores are written to `eval/results/<timestamp>.json`.
 
-## Run the unit tests
+## Run the unit tests / lint / type check
 
 ```bash
-pytest
+make check    # ruff + mypy + pytest — same checks CI runs on every push
 ```
 
-All tests use fakes (`ScriptedLLM`, `FakeEmbedder`, `ScriptedIntentClassifier`, `InMemoryCalendarClient`) — no API key, network access, or database required. Covers the graph's routing logic (booking, escalation on complaint, escalation on low confidence, info-only skipping the calendar check) and memory recall.
+All tests use fakes (`ScriptedLLM`, `FakeEmbedder`, `ScriptedIntentClassifier`, `InMemoryCalendarClient`) — no API key, network access, or database required. Covers the graph's routing logic (booking, escalation on complaint, escalation on low confidence, info-only skipping the calendar check, malformed-LLM-response fallback, hallucinated-slot rejection) and memory recall.
 
 ## Going live (optional — requires your own accounts)
 
@@ -121,3 +125,11 @@ The webhook layer (`src/ringbrain/api/main.py`) and integrations are real, worki
 - Designed a persistent semantic memory layer (pgvector + sentence-transformers) giving the agent cross-conversation recall of customer history
 - Built an automated eval harness with LLM-simulated callers across 7 personas, tracking task-completion rate, hallucination rate, and LLM-judged conversational quality — enabling regression detection on prompt/model changes
 - Applied a router pattern combining a free local zero-shot classifier for intent detection with an LLM only for generation, cutting unnecessary model calls
+- Hardened the LLM call path with retry/backoff on transient failures and a validation layer that rejects model-hallucinated appointment slots instead of booking them — shipped with CI (lint + type-check + tests) on every push
+
+## Development
+
+- `make lint` — ruff
+- `make typecheck` — mypy (strict-ish: `warn_unused_ignores`, `no_implicit_optional`)
+- `make test` — pytest, fully offline
+- `make check` — all three, same as CI

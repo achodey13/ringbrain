@@ -38,10 +38,10 @@ class EvalReport:
 
     @property
     def hallucination_rate(self) -> float:
-        checked = [r for r in self.results if r.hallucination_detected is not None]
-        applicable = [r for r in self.results]
-        flagged = [r for r in applicable if r.hallucination_detected]
-        return len(flagged) / len(applicable) if applicable else 0.0
+        if not self.results:
+            return 0.0
+        flagged = sum(r.hallucination_detected for r in self.results)
+        return flagged / len(self.results)
 
     @property
     def average_turns(self) -> float:

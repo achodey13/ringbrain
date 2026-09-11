@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from ringbrain.agents.llm import AnthropicClient, LLMClient
+from ringbrain.agents.nodes import CalendarClient
 from ringbrain.agents.state import Turn
 from ringbrain.config import settings
 from ringbrain.integrations.calendar import GoogleCalendarClient
@@ -41,7 +42,7 @@ class Runtime:
     intent_classifier: IntentClassifier
     embedder: Embedder
     summarizer: Summarizer
-    calendar: "object"
+    calendar: CalendarClient
     sms: SMSClient
     sessions: CallSessionStore
 

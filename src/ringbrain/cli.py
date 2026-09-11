@@ -4,15 +4,19 @@ Postgres, no Google credentials needed. Only requires ANTHROPIC_API_KEY.
     python -m ringbrain.cli
 """
 
+import logging
 import sys
 
 from ringbrain.agents.graph import build_call_graph
 from ringbrain.agents.llm import AnthropicClient
 from ringbrain.config import settings
 from ringbrain.integrations.calendar import InMemoryCalendarClient
+from ringbrain.logging_config import configure_logging
 from ringbrain.memory.embedder import SentenceTransformerEmbedder
 from ringbrain.memory.inmemory import InMemoryMemoryStore
 from ringbrain.nlp.intent import ZeroShotIntentClassifier
+
+configure_logging(level=logging.WARNING)  # keep the REPL clean; warnings (e.g. a caught hallucination) still show
 
 
 def main() -> None:

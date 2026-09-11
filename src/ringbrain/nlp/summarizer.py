@@ -14,7 +14,7 @@ class DialogueSummarizer:
     def __init__(self, model_name: str = "philschmid/bart-large-cnn-samsum"):
         from transformers import pipeline
 
-        self._pipe = pipeline("summarization", model=model_name)
+        self._pipe = pipeline("summarization", model=model_name)  # type: ignore[call-overload]
 
     def summarize(self, transcript: str) -> str:
         result = self._pipe(transcript, max_length=80, min_length=10, do_sample=False)

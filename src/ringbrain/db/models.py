@@ -18,15 +18,15 @@ def _uuid() -> str:
 
 
 def _now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
-class Channel(str, enum.Enum):
+class Channel(enum.StrEnum):
     voice = "voice"
     sms = "sms"
 
 
-class AppointmentStatus(str, enum.Enum):
+class AppointmentStatus(enum.StrEnum):
     booked = "booked"
     rescheduled = "rescheduled"
     cancelled = "cancelled"

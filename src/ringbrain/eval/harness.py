@@ -19,9 +19,12 @@ from ringbrain.eval.metrics import EvalReport, PersonaResult, detect_price_hallu
 from ringbrain.eval.personas import PERSONAS, Persona
 from ringbrain.eval.simulate_caller import END_TOKEN, simulate_customer_turn
 from ringbrain.integrations.calendar import InMemoryCalendarClient
+from ringbrain.logging_config import configure_logging
 from ringbrain.memory.embedder import SentenceTransformerEmbedder
 from ringbrain.memory.inmemory import InMemoryMemoryStore
 from ringbrain.nlp.intent import ZeroShotIntentClassifier
+
+configure_logging()
 
 GREETING = "Thanks for calling {business}. How can I help you today?"
 

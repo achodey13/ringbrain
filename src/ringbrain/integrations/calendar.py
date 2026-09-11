@@ -53,7 +53,7 @@ class GoogleCalendarClient:
 
     def available_slots(self) -> list[str]:
         service = self._get_service()
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         time_min = now.isoformat()
         time_max = (now + datetime.timedelta(days=LOOKAHEAD_DAYS)).isoformat()
 
@@ -79,7 +79,7 @@ class GoogleCalendarClient:
             for hour in range(*BUSINESS_HOURS):
                 for minute in (0, 30):
                     start = datetime.datetime.combine(
-                        day, datetime.time(hour, minute), tzinfo=datetime.timezone.utc
+                        day, datetime.time(hour, minute), tzinfo=datetime.UTC
                     )
                     if start <= now:
                         continue
@@ -114,7 +114,7 @@ class InMemoryCalendarClient:
     """
 
     def __init__(self, slots: list[str] | None = None):
-        now = datetime.datetime.now(datetime.timezone.utc).replace(
+        now = datetime.datetime.now(datetime.UTC).replace(
             minute=0, second=0, microsecond=0
         )
         self._slots = slots or [

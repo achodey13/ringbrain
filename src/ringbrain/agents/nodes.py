@@ -1,19 +1,34 @@
 import json
+import logging
 from typing import Protocol
 
 from ringbrain.agents.llm import LLMClient
 from ringbrain.agents.state import CallState
-from ringbrain.memory.store import MemoryStore
+from ringbrain.memory.store import RecalledMemory
 from ringbrain.nlp.intent import IntentClassifier
+
+logger = logging.getLogger("ringbrain.agents")
 
 BOOKING_INTENTS = {"book_appointment", "reschedule_appointment"}
 ESCALATION_INTENTS = {"complaint"}
 CONFIDENCE_THRESHOLD = 0.55
 
+FALLBACK_REPLY = (
+    "Sorry, I'm having trouble processing that right now — let me get you to someone who can help."
+)
+
 
 class CalendarClient(Protocol):
     def available_slots(self) -> list[str]: ...
     def book(self, start_time: str, customer_name: str) -> str: ...
+
+
+class MemoryReader(Protocol):
+    """What the graph needs from a memory store — just recall. Both the
+    Postgres-backed MemoryStore and the in-memory fake satisfy this.
+    """
+
+    def recall(self, customer_id: str, query: str, top_k: int = 3) -> list[RecalledMemory]: ...
 
 
 def make_classify_intent_node(classifier: IntentClassifier):
@@ -24,7 +39,7 @@ def make_classify_intent_node(classifier: IntentClassifier):
     return classify_intent
 
 
-def make_recall_memory_node(memory_store: MemoryStore):
+def make_recall_memory_node(memory_store: MemoryReader):
     def recall_memory(state: CallState) -> dict:
         recalled = memory_store.recall(state["customer_id"], state["utterance"], top_k=3)
         return {"recalled_memory": [m.content for m in recalled]}
@@ -51,21 +66,31 @@ def make_generate_reply_node(llm: LLMClient):
             '"chosen_slot": "<ISO datetime copied exactly from the available slots list, or null>"}'
         )
         raw = llm.complete(system, user_message)
-        parsed = _parse_json_response(raw)
-        return {
-            "reply": parsed["reply"],
-            "action": parsed.get("action", "none"),
-            "chosen_slot": parsed.get("chosen_slot"),
-        }
+        try:
+            parsed = _parse_json_response(raw)
+            reply, action, chosen_slot = parsed["reply"], parsed.get("action", "none"), parsed.get("chosen_slot")
+        except (json.JSONDecodeError, KeyError, TypeError):
+            logger.warning("LLM returned unparseable response, escalating: %r", raw)
+            return {"reply": FALLBACK_REPLY, "action": "none", "chosen_slot": None, "escalate": True}
+
+        # Never trust the model to only offer real availability — if it named a
+        # slot we didn't actually give it, treat that as a caught hallucination
+        # rather than booking (or claiming to book) something that doesn't exist.
+        if action == "book" and chosen_slot not in state.get("available_slots", []):
+            logger.warning("LLM chose a slot outside availability, downgrading: %r", chosen_slot)
+            action, chosen_slot = "none", None
+
+        return {"reply": reply, "action": action, "chosen_slot": chosen_slot}
 
     return generate_reply
 
 
 def make_booking_node(calendar: CalendarClient):
     def booking(state: CallState) -> dict:
-        if not state.get("chosen_slot"):
+        chosen_slot = state.get("chosen_slot")
+        if not chosen_slot:
             return {"booked_event_id": None}
-        event_id = calendar.book(state["chosen_slot"], state.get("customer_name") or "Customer")
+        event_id = calendar.book(chosen_slot, state.get("customer_name") or "Customer")
         return {"booked_event_id": event_id}
 
     return booking

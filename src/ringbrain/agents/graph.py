@@ -3,6 +3,7 @@ from langgraph.graph import END, StateGraph
 from ringbrain.agents.llm import LLMClient
 from ringbrain.agents.nodes import (
     CalendarClient,
+    MemoryReader,
     escalate_node,
     make_booking_node,
     make_check_availability_node,
@@ -14,14 +15,13 @@ from ringbrain.agents.nodes import (
     route_after_reply,
 )
 from ringbrain.agents.state import CallState
-from ringbrain.memory.store import MemoryStore
 from ringbrain.nlp.intent import IntentClassifier
 
 
 def build_call_graph(
     llm: LLMClient,
     intent_classifier: IntentClassifier,
-    memory_store: MemoryStore,
+    memory_store: MemoryReader,
     calendar: CalendarClient,
 ):
     """Wires the RingBrain agent pipeline:

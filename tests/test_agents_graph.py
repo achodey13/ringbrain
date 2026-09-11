@@ -84,6 +84,46 @@ def test_info_only_flow_skips_availability_check(fake_embedder, fake_calendar):
     assert result.get("booked_event_id") is None
 
 
+def test_malformed_llm_response_escalates_instead_of_crashing(fake_embedder, fake_calendar):
+    memory_store = InMemoryMemoryStore(fake_embedder)
+    customer = memory_store.get_or_create_customer("+15556667777")
+
+    llm = ScriptedLLM(["not valid json at all"])
+    intent_classifier = ScriptedIntentClassifier("general_question", confidence=0.8)
+
+    graph = build_call_graph(llm, intent_classifier, memory_store, fake_calendar)
+    result = graph.invoke(_base_state(customer, "What are your hours?"))
+
+    assert result["escalate"] is True
+    assert result["action"] == "none"
+
+
+def test_hallucinated_slot_is_downgraded_not_booked(fake_embedder, fake_calendar):
+    memory_store = InMemoryMemoryStore(fake_embedder)
+    customer = memory_store.get_or_create_customer("+15558889999")
+
+    llm = ScriptedLLM(
+        [
+            json.dumps(
+                {
+                    "reply": "You're all set for 3pm tomorrow!",
+                    "action": "book",
+                    "chosen_slot": "2099-01-01T15:00:00+00:00",  # not a real available slot
+                }
+            )
+        ]
+    )
+    intent_classifier = ScriptedIntentClassifier("book_appointment", confidence=0.95)
+
+    graph = build_call_graph(llm, intent_classifier, memory_store, fake_calendar)
+    result = graph.invoke(_base_state(customer, "Book me for tomorrow"))
+
+    assert result["action"] == "none"
+    assert result["chosen_slot"] is None
+    assert result.get("booked_event_id") is None
+    assert len(fake_calendar.booked) == 0
+
+
 def test_memory_recall_finds_relevant_past_context(fake_embedder):
     memory_store = InMemoryMemoryStore(fake_embedder)
     customer = memory_store.get_or_create_customer("+15554445555")

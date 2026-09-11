@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, text
@@ -18,7 +19,7 @@ def init_db() -> None:
 
 
 @contextmanager
-def get_session() -> Session:
+def get_session() -> Iterator[Session]:
     session = SessionLocal()
     try:
         yield session

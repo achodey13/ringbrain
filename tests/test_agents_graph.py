@@ -1,6 +1,7 @@
 import json
 
 from ringbrain.agents.graph import build_call_graph
+from ringbrain.agents.nodes import FALLBACK_REPLY
 from ringbrain.memory.inmemory import InMemoryMemoryStore
 from tests.conftest import ScriptedIntentClassifier, ScriptedLLM
 
@@ -98,7 +99,7 @@ def test_malformed_llm_response_escalates_instead_of_crashing(fake_embedder, fak
     assert result["action"] == "none"
 
 
-def test_hallucinated_slot_is_downgraded_not_booked(fake_embedder, fake_calendar):
+def test_hallucinated_slot_escalates_without_confirming_booking(fake_embedder, fake_calendar):
     memory_store = InMemoryMemoryStore(fake_embedder)
     customer = memory_store.get_or_create_customer("+15558889999")
 
@@ -120,6 +121,8 @@ def test_hallucinated_slot_is_downgraded_not_booked(fake_embedder, fake_calendar
 
     assert result["action"] == "none"
     assert result["chosen_slot"] is None
+    assert result["reply"] == FALLBACK_REPLY
+    assert result["escalate"] is True
     assert result.get("booked_event_id") is None
     assert len(fake_calendar.booked) == 0
 
@@ -134,3 +137,4 @@ def test_memory_recall_finds_relevant_past_context(fake_embedder):
 
     assert recalled
     assert "whitening" in recalled[0].content
+

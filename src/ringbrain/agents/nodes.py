@@ -73,12 +73,12 @@ def make_generate_reply_node(llm: LLMClient):
             logger.warning("LLM returned unparseable response, escalating: %r", raw)
             return {"reply": FALLBACK_REPLY, "action": "none", "chosen_slot": None, "escalate": True}
 
-        # Never trust the model to only offer real availability — if it named a
-        # slot we didn't actually give it, treat that as a caught hallucination
-        # rather than booking (or claiming to book) something that doesn't exist.
+        # Reject the whole response when a booking names an unavailable slot.
+        # Keeping its reply could falsely tell the customer they are booked
+        # even though the calendar action is refused.
         if action == "book" and chosen_slot not in state.get("available_slots", []):
-            logger.warning("LLM chose a slot outside availability, downgrading: %r", chosen_slot)
-            action, chosen_slot = "none", None
+            logger.warning("LLM chose a slot outside availability, escalating: %r", chosen_slot)
+            return {"reply": FALLBACK_REPLY, "action": "none", "chosen_slot": None, "escalate": True}
 
         return {"reply": reply, "action": action, "chosen_slot": chosen_slot}
 
@@ -147,3 +147,4 @@ def _parse_json_response(raw: str) -> dict:
         if text.startswith("json"):
             text = text[4:]
     return json.loads(text)
+

@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from ringbrain.agents.graph import build_call_graph
 from ringbrain.agents.nodes import FALLBACK_REPLY
 from ringbrain.memory.inmemory import InMemoryMemoryStore
@@ -125,6 +127,32 @@ def test_hallucinated_slot_escalates_without_confirming_booking(fake_embedder, f
     assert result["escalate"] is True
     assert result.get("booked_event_id") is None
     assert len(fake_calendar.booked) == 0
+
+
+@pytest.mark.parametrize("invalid_fields", [{"reply": None}, {"reply": []}, {"action": {}}])
+def test_malformed_booking_fields_never_create_calendar_event(fake_embedder, fake_calendar, invalid_fields):
+    memory_store = InMemoryMemoryStore(fake_embedder)
+    customer = memory_store.get_or_create_customer("+15558889999")
+    response = {
+        "reply": "You're booked!",
+        "action": "book",
+        "chosen_slot": fake_calendar.available_slots()[0],
+    }
+    response.update(invalid_fields)
+    llm = ScriptedLLM([json.dumps(response)])
+    intent_classifier = ScriptedIntentClassifier("book_appointment", confidence=0.95)
+    original_slots = fake_calendar.available_slots()
+
+    graph = build_call_graph(llm, intent_classifier, memory_store, fake_calendar)
+    result = graph.invoke(_base_state(customer, "Book me for tomorrow"))
+
+    assert result["reply"] == FALLBACK_REPLY
+    assert result["action"] == "none"
+    assert result["chosen_slot"] is None
+    assert result["escalate"] is True
+    assert result.get("booked_event_id") is None
+    assert fake_calendar.booked == []
+    assert fake_calendar.available_slots() == original_slots
 
 
 def test_memory_recall_finds_relevant_past_context(fake_embedder):

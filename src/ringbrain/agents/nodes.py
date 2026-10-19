@@ -69,8 +69,14 @@ def make_generate_reply_node(llm: LLMClient):
         try:
             parsed = _parse_json_response(raw)
             reply, action, chosen_slot = parsed["reply"], parsed.get("action", "none"), parsed.get("chosen_slot")
-        except (json.JSONDecodeError, KeyError, TypeError):
-            logger.warning("LLM returned unparseable response, escalating: %r", raw)
+            if not isinstance(reply, str) or not reply.strip():
+                raise ValueError("reply must be a nonempty string")
+            if not isinstance(action, str) or action not in {"none", "book"}:
+                raise ValueError("action must be 'none' or 'book'")
+            if chosen_slot is not None and not isinstance(chosen_slot, str):
+                raise ValueError("chosen_slot must be a string or null")
+        except (KeyError, TypeError, ValueError):
+            logger.warning("LLM returned invalid response, escalating: %r", raw)
             return {"reply": FALLBACK_REPLY, "action": "none", "chosen_slot": None, "escalate": True}
 
         # Reject the whole response when a booking names an unavailable slot.
@@ -146,5 +152,8 @@ def _parse_json_response(raw: str) -> dict:
         text = text.strip("`")
         if text.startswith("json"):
             text = text[4:]
-    return json.loads(text)
+    parsed = json.loads(text)
+    if not isinstance(parsed, dict):
+        raise ValueError("response must be a JSON object")
+    return parsed
 
